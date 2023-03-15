@@ -1,0 +1,44 @@
+cabal-version:      3.4
+
+name:               ghc-perf
+version:            0.1.0.0
+synopsis:           Performance tuning tool for GHC
+
+license:            BSD-3-Clause
+license-file:       LICENSE
+
+author:             Sylvain Henry
+maintainer:         sylvain@haskus.fr
+
+category:           Development
+build-type:         Simple
+
+extra-doc-files:    CHANGELOG.md
+
+-- Extra source files to be distributed with the package, such as examples, or a tutorial module.
+-- extra-source-files:
+
+common warnings
+    ghc-options: -Wall -fhide-source-paths -threaded
+
+executable ghc-perf
+    import:           warnings
+
+    main-is:          Main.hs
+
+    -- Modules included in this executable, other than Main.
+    -- other-modules:
+
+    -- LANGUAGE extensions used by modules in this package.
+    -- other-extensions:
+
+    -- Other library packages from which modules are imported.
+    build-depends:    base ^>=4.17.0.0,
+                      brick,
+                      vty
+
+    -- Directories containing source files.
+    hs-source-dirs:   app
+
+    -- Base language which the package is written in.
+    default-language: Haskell2010
