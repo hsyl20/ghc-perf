@@ -1,4 +1,4 @@
-# Revision history for ghc-perf
+# Revision history for ghc-profiler
 
 ## 0.1.0.0 -- YYYY-mm-dd
 

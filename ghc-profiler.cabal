@@ -1,6 +1,6 @@
 cabal-version:      3.4
 
-name:               ghc-perf
+name:               ghc-profiler
 version:            0.1.0.0
 synopsis:           Performance tuning tool for GHC
 
@@ -21,7 +21,7 @@ extra-doc-files:    CHANGELOG.md
 common warnings
     ghc-options: -Wall -fhide-source-paths -threaded
 
-executable ghc-perf
+executable ghc-profiler
     import:           warnings
 
     main-is:          Main.hs
