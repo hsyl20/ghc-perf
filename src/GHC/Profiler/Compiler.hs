@@ -30,6 +30,8 @@ withRevision rev act = do
   -- store in system temporary directory for now. We may want to offer control
   -- over this to the user...
   withSystemTempDirectory "ghc-repo" \fp -> do
+
+    -- it would be better to download a shallow clone if possible
     let clone = (shell ("git clone " <> ghcRepository rev))
                 { cwd = Just fp
                 }
