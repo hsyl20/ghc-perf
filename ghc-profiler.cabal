@@ -29,6 +29,7 @@ executable ghc-profiler
     -- Modules included in this executable, other than Main.
     other-modules:    GHC.Profiler.UI
                       GHC.Profiler.State
+                      GHC.Profiler.Compiler
 
     -- LANGUAGE extensions used by modules in this package.
     -- other-extensions:
@@ -36,7 +37,11 @@ executable ghc-profiler
     -- Other library packages from which modules are imported.
     build-depends:    base ^>=4.17.0.0,
                       brick,
-                      vty
+                      vty,
+                      temporary,
+                      directory,
+                      filepath,
+                      process
 
     -- Directories containing source files.
     hs-source-dirs:   src
