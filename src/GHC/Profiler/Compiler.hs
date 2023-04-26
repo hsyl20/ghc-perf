@@ -41,16 +41,14 @@ withRevision rev act = do
                     { cwd = Just (fp </> "ghc")
                     }
 
-    -- it would be better to download a shallow clone if possible
-    let clone    = sh     $ "git clone " <> ghcRepository rev
+    -- Perform shallow clone (submodules too)
+    let clone    = sh     $ "git clone --depth=1 --recurse-submodules --shallow-submodules " <> ghcRepository rev
     let checkout = ghc_sh $ "git checkout " <> ghcHash rev
-    let submods  = ghc_sh $ "git submodule update --init"
 
     putStrLn $ "Cloning GHC in " ++ fp
 
     putStrLn =<< readCreateProcess clone ""
     putStrLn =<< readCreateProcess checkout ""
-    putStrLn =<< readCreateProcess submods ""
     act (fp </> "ghc")
 
 data GhcBuildOpts = GhcBuildOpts
