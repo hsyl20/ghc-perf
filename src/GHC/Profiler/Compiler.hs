@@ -1,10 +1,13 @@
 {-# LANGUAGE BlockArguments #-}
 
 module GHC.Profiler.Compiler
-  ( Revision (..)
+  ( -- * Git revisions
+    Revision (..)
   , withRevision
-  -- * Revisions
   , ghcRecent
+  -- * Building GHC
+  , GhcBuildOpts (..)
+  , withGhcBindist
   )
 where
 
@@ -31,16 +34,56 @@ withRevision rev act = do
   -- over this to the user...
   withSystemTempDirectory "ghc-repo" \fp -> do
 
+    let sh x     = (shell x)
+                    { cwd = Just fp
+                    }
+    let ghc_sh x = (shell x)
+                    { cwd = Just (fp </> "ghc")
+                    }
+
     -- it would be better to download a shallow clone if possible
-    let clone = (shell ("git clone " <> ghcRepository rev))
-                { cwd = Just fp
-                }
-    let checkout = (shell ("git checkout " <> ghcHash rev))
-                { cwd = Just (fp </> "ghc")
-                }
+    let clone    = sh     $ "git clone " <> ghcRepository rev
+    let checkout = ghc_sh $ "git checkout " <> ghcHash rev
+    let submods  = ghc_sh $ "git submodule update --init"
 
     putStrLn $ "Cloning GHC in " ++ fp
 
     putStrLn =<< readCreateProcess clone ""
     putStrLn =<< readCreateProcess checkout ""
+    putStrLn =<< readCreateProcess submods ""
     act (fp </> "ghc")
+
+data GhcBuildOpts = GhcBuildOpts
+  { buildFlavour        :: !String          -- ^ Hadrian flavour
+  , buildTarget         :: !(Maybe String)  -- ^ Configure target
+  , buildUseEmconfigure :: !Bool            -- ^ Wrap configure with emconfigure
+  }
+
+-- | Checkout a compiler revision in a temporary directory
+withGhcBindist :: Revision -> GhcBuildOpts -> (FilePath -> IO a) -> IO a
+withGhcBindist rev opts act = withRevision rev $ \fp -> do
+    let sh x     = (shell x)
+                    { cwd = Just fp
+                    }
+
+    let boot      = sh $ "./boot"
+    let configure = sh $ mconcat
+                      [ if buildUseEmconfigure opts then "emconfigure " else ""
+                      , "./configure"
+                      , case buildTarget opts of
+                          Nothing  -> ""
+                          Just tgt -> " --target=" <> tgt
+                      ]
+    let build     = sh $ mconcat
+                      [ "./hadrian/build binary-dist-dir --docs=none"
+                      , " -j"
+                      ]
+
+
+    putStrLn $ "Building GHC in " ++ fp
+
+    putStrLn =<< readCreateProcess boot ""
+    putStrLn =<< readCreateProcess configure ""
+    putStrLn =<< readCreateProcess build ""
+
+    act (fp </> "bindist")
