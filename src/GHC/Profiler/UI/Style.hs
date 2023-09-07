@@ -23,9 +23,6 @@ gridTemplateAreas :: [[Data.Text.Text]] -> Css
 gridTemplateAreas = key "grid-template-areas" . intercalate " " . Prelude.map (bracket . noCommas)
   where
     bracket x = "\"" <> x <> "\""
-
-resize :: Data.Text.Text -> Css
-resize = key "resize"
 -----------------------------
 
 -- | Rendered CSS style
@@ -34,8 +31,8 @@ resize = key "resize"
 renderedCss :: Text
 renderedCss = Clay.renderWith format [] css
   where
-    --format = compact
-    format = pretty -- enable this for debugging CSS
+    format = compact
+    --format = pretty -- enable this for debugging CSS
 
 -- | CSS style
 css :: Css
