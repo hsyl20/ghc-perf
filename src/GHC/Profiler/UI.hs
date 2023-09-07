@@ -63,13 +63,12 @@ full p = doctypehtml_ $ do
   body_ do
     div_ [id_ "container"] do
       div_ [id_ "header"] do
-        "GHC profiler"
+        div_ [class_ "logo"] do
+          "GHC profiler"
       div_ [id_ "sidenav"] do
         "Navigation"
       div_ [id_ "main" ] do
         p
-      div_ [id_ "footer"] do
-        "GHC profiler rocks"
 
 emptyHtml :: Monad m => HtmlT m ()
 emptyHtml = mempty

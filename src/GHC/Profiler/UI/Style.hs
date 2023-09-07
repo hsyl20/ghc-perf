@@ -40,8 +40,24 @@ renderedCss = Clay.renderWith format [] css
 -- | CSS style
 css :: Css
 css = do
+  let
+    head_bg = "#0074B7"
+    side_fg = black
+    main_bg = white
+    main_fg = black
+    side_bg = lightgray
+    head_fg = white
+
+    valignCenter = do
+      -- vertical alignment trick from
+      -- https://stackoverflow.com/a/4416166
+      position relative
+      top (pct 50)
+      transform (translate (px 0) (pct (-50)))
+      left (px 15)
+
   body ? do
-    backgroundColor "#cac9c9"
+    fontFamily [] [sansSerif]
     margin (px 0) (px 0) (px 0) (px 0)
 
   "#container" ? do
@@ -53,25 +69,28 @@ css = do
     --  @media(max-width: 768px) {
     --    grid-template-...
     --  }
-    gridTemplateRows    [ fr 2, fr 20, fr 1]
+    gridTemplateRows    [ px 50, auto]
     gridTemplateColumns [ fr 1, fr 4]
     gridTemplateAreas   [ [ "header", "header"]
                         , [ "sidenav","main"]
-                        , [ "footer", "footer"]
                         ]
-    gridGap (px 5)
+    gridGap (px 0)
 
   "#header" ? do
-    background green
+    backgroundColor head_bg
+    fontColor head_fg
     gridArea "header"
 
-  "#footer" ? do
-    background gray
-    gridArea "footer"
+    ".logo" ? do
+      fontWeight bold
+      fontSize (pt 18)
+      valignCenter
+      
 
   "#sidenav" ? do
     overflow auto
-    background yellow
+    backgroundColor side_bg
+    fontColor side_fg
     gridArea "sidenav"
     boxSizing borderBox
     -- resize "horizontal"
@@ -82,5 +101,6 @@ css = do
       -- layout apparently.
 
   "#main" ? do
-    background orange
+    backgroundColor main_bg
+    fontColor main_fg
     gridArea "main"
