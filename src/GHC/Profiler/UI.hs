@@ -53,16 +53,23 @@ clickedHtml state = do
   div_ "Clicked!"
 
 -- | Full page: send HTML headers
-full :: Monad m => HtmlT m a -> HtmlT m a
+full :: Monad m => HtmlT m () -> HtmlT m ()
 full p = doctypehtml_ $ do
   head_ do
     title_ "GHC Profiler"
-    -- HTMX script
     script_ [ src_ "https://unpkg.com/htmx.org@1.9.5" ] emptyHtml
     -- CSS style
     link_ [ href_ "/style.css", rel_ "stylesheet", type_ "text/css"]
   body_ do
-    p
+    div_ [id_ "container"] do
+      div_ [id_ "header"] do
+        "GHC profiler"
+      div_ [id_ "sidenav"] do
+        "Navigation"
+      div_ [id_ "main" ] do
+        p
+      div_ [id_ "footer"] do
+        "GHC profiler rocks"
 
 emptyHtml :: Monad m => HtmlT m ()
 emptyHtml = mempty
