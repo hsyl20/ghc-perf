@@ -1,54 +1,68 @@
--- | App UI
+{-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE BlockArguments #-}
+
+-- | App web UI
 module GHC.Profiler.UI
-  ( runState
+  ( httpApp
   )
 where
 
-import Brick
-import Graphics.Vty.Attributes (defAttr)
-import Graphics.Vty.Input.Events
-
 import GHC.Profiler.State
+import GHC.Profiler.UI.Style
 
-type AppEvent = ()
+import Network.Wai
+import Network.HTTP.Types.Status
+import Lucid.Base
+import Lucid.Html5
+import Lucid.Htmx
+import Data.Text.Lazy.Encoding (encodeUtf8)
 
-data Name
-  = Viewport1
-  | Viewport2
-  deriving (Eq,Ord,Show)
+httpApp :: S -> Application
+httpApp state req respond = do
 
--- | Run Brick application on the given state
-runState :: AppState -> IO AppState
-runState = defaultMain app
+  let
+    respondHtmlM' status headers html = do
+      bs <- Lucid.Base.renderBS <$> html
+      respond (responseLBS status headers bs)
 
-app :: App AppState AppEvent Name
-app = App
-  { appDraw         = draw
-  , appChooseCursor = chooseCursor
-  , appHandleEvent  = handleEvent
-  , appStartEvent   = startEvent
-  , appAttrMap      = attributeMap
-  }
+    respondHtml' status headers html = respondHtmlM' status headers (pure html)
 
-ui :: Widget Name
-ui = str "Hello World"
+    respondHtmlM html = respondHtmlM' ok200 [] html
+    respondHtml  html = respondHtml'  ok200 [] html
+    respondLBS status headers bs = respond (responseLBS status headers bs)
+    respondText status headers t = respondLBS status headers (encodeUtf8 t)
 
-draw :: AppState -> [Widget Name]
-draw _ = [ui]
+  -- match on request and respond
+  case pathInfo req of
+    [] -> respondHtml (homePage state)
+    ["style.css"] -> respondText ok200 [] renderedCss
+    ["clicked"]   -> respondHtml (clickedHtml state)
+    _             -> respondLBS status404 [] ""
 
-chooseCursor :: AppState -> [CursorLocation Name] -> Maybe (CursorLocation Name)
-chooseCursor _ _ = Nothing
 
-handleEvent :: BrickEvent Name AppEvent -> EventM Name AppState ()
-handleEvent ev = do
-  case ev of
-    VtyEvent (EvKey (KChar 'c') [MCtrl]) -> halt
-    _                                    -> pure ()
-  pure ()
+homePage :: S -> Html ()
+homePage state = full $ do
+  button_
+    [ hxPost_ "/clicked"
+    , hxSwap_ "outerHTML"
+    ] do
+    "Click me!"
 
-startEvent :: EventM Name AppState ()
-startEvent = pure ()
+clickedHtml :: S -> Html ()
+clickedHtml state = do
+  div_ "Clicked!"
 
-attributeMap :: AppState -> AttrMap
-attributeMap _ = attrMap defAttr []
+-- | Full page: send HTML headers
+full :: Monad m => HtmlT m a -> HtmlT m a
+full p = doctypehtml_ $ do
+  head_ do
+    title_ "GHC Profiler"
+    -- HTMX script
+    script_ [ src_ "https://unpkg.com/htmx.org@1.9.5" ] emptyHtml
+    -- CSS style
+    link_ [ href_ "/style.css", rel_ "stylesheet", type_ "text/css"]
+  body_ do
+    p
 
+emptyHtml :: Monad m => HtmlT m ()
+emptyHtml = mempty

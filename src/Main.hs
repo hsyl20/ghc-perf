@@ -3,8 +3,13 @@ module Main where
 import GHC.Profiler.UI
 import GHC.Profiler.State
 
+import qualified Network.Wai.Handler.Warp as Warp
+
 main :: IO ()
 main = do
-  _finalState <- runState =<< initialState
+  -- initialize application state
+  state <- initState
 
-  pure ()
+  -- run server
+  putStrLn "Running ghc-profiler on port 3000"
+  Warp.run 3000 (httpApp state)
