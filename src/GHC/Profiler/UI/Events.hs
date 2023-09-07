@@ -47,7 +47,7 @@ responseSSE (SSE ch') = do
   ch <- liftIO $ dupChan ch'
   pure $ responseStream status200 [(hContentType, "text/event-stream")]
     \write flush -> void do
-      write (eventToBuilder (CommentEvent "Ready!"))
+      write (eventToBuilder (RetryEvent 10000)) -- only retry after 10 seconds
       flush
       let loop = do
             se <- readChan ch
