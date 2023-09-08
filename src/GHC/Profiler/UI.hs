@@ -112,6 +112,25 @@ clickButton =
 
 homePage :: S -> Html ()
 homePage _state = full $ do
+  h1_ "Welcome to the GHC profiler (alpha)"
+  p_ "The purpose of this profiler is twofold:"
+  ul_ do
+    li_ "Profiling and optimizing GHC itself"
+    li_ "Profiling and optimizing programs built with GHC"
+
+  p_ do
+    "This tool allows you to perform several analyses directly from this interface. "
+    "Use the navigation panel on the left to start producing and exploring profiling data. "
+
+  p_ do
+    "Bug reports and suggestions welcome at "
+    a_ [ href_   "https://github.com/hsyl20/ghc-profiler/issues"
+       , target_ "blank_"
+       ]
+       "https://github.com/hsyl20/ghc-profiler/issues"
+
+  p_ "Happy profiling!"
+
   clickButton
 
 

@@ -89,6 +89,7 @@ css = do
     backgroundColor side_bg
     fontColor side_fg
     gridArea "sidenav"
+    padding (px 10) (px 10) (px 10) (px 10)
     boxSizing borderBox
     -- resize "horizontal"
       -- TODO: Doesn't support reducing the horizontal size of the menu well...
@@ -101,3 +102,4 @@ css = do
     backgroundColor main_bg
     fontColor main_fg
     gridArea "main"
+    paddingLeft (px 10)
