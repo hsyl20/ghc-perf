@@ -67,7 +67,7 @@ css = do
     --    grid-template-...
     --  }
     gridTemplateRows    [ px 50, auto]
-    gridTemplateColumns [ fr 1, fr 4]
+    gridTemplateColumns [ px 200, fr 4]
     gridTemplateAreas   [ [ "header", "header"]
                         , [ "sidenav","main"]
                         ]
@@ -89,7 +89,6 @@ css = do
     backgroundColor side_bg
     fontColor side_fg
     gridArea "sidenav"
-    padding (px 10) (px 10) (px 10) (px 10)
     boxSizing borderBox
     -- resize "horizontal"
       -- TODO: Doesn't support reducing the horizontal size of the menu well...
@@ -97,6 +96,28 @@ css = do
       --
       -- I've tried resizable from interactjs but it doesn't work with grid
       -- layout apparently.
+
+    ".navitem" ? do
+
+      width (pct 100)
+      textAlign center
+      paddingTop    (em 0.5)
+      paddingBottom (em 0.5)
+      cursor pointer
+
+      ":hover" & do
+        backgroundColor "#5e9eee"
+
+    ".navsubitem" ? do
+
+      width (pct 100)
+      textAlign center
+      paddingTop    (em 0.5)
+      paddingBottom (em 0.5)
+      cursor pointer
+
+      ":hover" & do
+        backgroundColor "#90bcf2"
 
   "#main" ? do
     backgroundColor main_bg

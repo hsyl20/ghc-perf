@@ -1,5 +1,6 @@
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE BlockArguments #-}
+{-# LANGUAGE MultiWayIf #-}
 
 -- | App web UI
 module GHC.Profiler.UI
@@ -22,6 +23,8 @@ import Data.Text.Lazy.Encoding (encodeUtf8)
 import Control.Concurrent
 import Control.Monad
 import Data.IORef
+import Data.Text (Text)
+import qualified Data.Text as Text
 import Data.ByteString.Builder
 
 ------------------------------------
@@ -75,9 +78,12 @@ httpApp uistate state req respond = do
 
   -- match on request and respond
   case pathInfo req of
-    [] -> respondHtml (homePage state)
+    []            -> respondHtml (full (welcomeHtml state))
+    ["welcome"]   -> respondHtml (welcomeHtml state)
     ["style.css"] -> respondText ok200 [] renderedCss
     ["events"]    -> respond =<< responseSSE sse
+
+    ["hello_world"] -> respondHtml helloHtml
 
     ["status"]    -> do
       v <- readIORef (uiCount uistate)
@@ -110,8 +116,8 @@ clickButton =
     "Click me!"
 
 
-homePage :: S -> Html ()
-homePage _state = full $ do
+welcomeHtml :: S -> Html ()
+welcomeHtml _state = do
   h1_ "Welcome to the GHC profiler (alpha)"
   p_ "The purpose of this profiler is twofold:"
   ul_ do
@@ -132,6 +138,8 @@ homePage _state = full $ do
   p_ "Happy profiling!"
 
   clickButton
+
+  showSubMenu 0
 
 
 clickedHtml :: S -> Html ()
@@ -161,7 +169,7 @@ clickedHtml _state = do
             "Received event data"
 
 -- | Full page: send HTML headers
-full :: Monad m => HtmlT m () -> HtmlT m ()
+full :: Html () -> Html ()
 full p = doctypehtml_ $ do
   head_ do
     title_ "GHC Profiler"
@@ -182,9 +190,69 @@ full p = doctypehtml_ $ do
           div_ [class_ "logo"] do
             "GHC profiler"
         div_ [id_ "sidenav"] do
-          "Navigation"
+          navHtml
         div_ [id_ "main" ] do
           p
 
 emptyHtml :: Monad m => HtmlT m ()
 emptyHtml = mempty
+
+helloHtml :: Html ()
+helloHtml = do
+  showSubMenu 1
+  "Hello World!"
+
+
+data Nav = Nav
+  { navTitle :: Text
+  , navURL   :: Text
+  , navSubs  :: [Nav]
+  }
+
+navs :: [Nav]
+navs =
+  [ Nav "Welcome" "/welcome" []
+  , Nav "Hello World" "/hello_world"
+      [ Nav "Sub item 1" "/sub1" []
+      , Nav "Sub item 2" "/sub2" []
+      , Nav "Sub item 3" "/sub3" []
+      ]
+  ]
+
+-- | Display the menu
+navHtml :: Html ()
+navHtml = forM_ (navs `zip` [0..]) \(nav,i) -> do
+  div_
+    [ hxTarget_ "#main"
+    , hxGet_    $ navURL nav
+    , class_    "navitem"
+    ] $ toHtml (navTitle nav)
+  div_
+    [ id_ (navSubId i)
+    ] emptyHtml -- TODO: display initial sub menu if necessary
+
+navSubItemHtml :: Nav -> Html ()
+navSubItemHtml nav = do
+  div_
+    [ hxTarget_ "#main"
+    , hxGet_    $ navURL nav
+    , class_    "navsubitem"
+    ] $ toHtml (navTitle nav)
+  -- We don't support third level nesting (yet)
+
+
+navSubId :: Int -> Text
+navSubId i = "navsub" <> Text.pack (show i)
+
+-- | Render submenus
+--
+-- For out-of-band update, all of them are empty except for the selected one.
+showSubMenu :: Int -> Html ()
+showSubMenu selected = do
+  forM_ (navs `zip` [0..]) \(nav,i) -> do
+    div_
+      [ id_ (navSubId i)
+      , hxSwapOob_ "true"
+      ] if
+          | i /= selected -> emptyHtml
+          | otherwise     -> forM_ (navSubs nav) navSubItemHtml
