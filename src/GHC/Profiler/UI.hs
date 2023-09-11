@@ -102,7 +102,7 @@ httpApp uistate state req respond = do
 
     ["clicked"]   -> do
       -- TODO: don't spawn the thread twice...
-      withSystemTempDirectory "ghc-prof" \fp -> void $ forkIO $ do
+      void $ forkIO $ withSystemTempDirectory "ghc-prof" \fp -> do
         let p = fp </> "HelloWorld.hs"
         Prelude.writeFile p
           "module Main where\n\
@@ -161,8 +161,8 @@ clickedHtml _state = do
             [ hxGet_ "/status"
             , hxTrigger_ "sse:status_update"
             ] do
-            "Triggered div"
-          -- -- show received event data
+            "GHC is building HelloWorld... Please wait."
+          -- show received event data
           -- div_
           --   [ sseSwap_ "status_update"
           --   ] do
