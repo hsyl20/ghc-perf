@@ -82,7 +82,12 @@ httpApp uistate state req respond = do
     ["style.css"] -> respondText ok200 [] renderedCss
     ["events"]    -> respond =<< responseSSE sse
 
-    ["hello_world"] -> respondHtml helloHtml
+    ["hello_world"] -> respondHtml do
+                        navHtml True [1]
+                        helloHtml
+    ["sub1"]        -> respondHtml do
+                        navHtml True [1,0]
+                        helloHtml
 
     ["status"]    -> do
       v <- readIORef (uiCount uistate)
@@ -139,7 +144,7 @@ welcomeHtml _state = do
   clickButton
 
   -- out-of-band menu update
-  navHtml True (Just 0)
+  navHtml True [0]
 
 
 clickedHtml :: S -> Html ()
@@ -190,7 +195,7 @@ full p = doctypehtml_ $ do
           div_ [class_ "logo"] do
             "GHC profiler"
         div_ [id_ "sidenav"] do
-          navHtml False (Just 0)
+          navHtml False [0]
         div_ [id_ "main" ] do
           p
 
@@ -199,8 +204,6 @@ emptyHtml = mempty
 
 helloHtml :: Html ()
 helloHtml = do
-  -- out-of-band menu update
-  navHtml True (Just 1)
   "Hello World!"
 
 
@@ -221,28 +224,34 @@ navs =
   ]
 
 -- | Display the menu
-navHtml :: Bool -> Maybe Int -> Html ()
-navHtml oob mi = do
+navHtml :: Bool -> [Int] -> Html ()
+navHtml oob path = do
+  let (sel1,sel2) = case path of
+        []    -> (Nothing,Nothing)
+        [a]   -> (Just a, Nothing)
+        a:b:_ -> (Just a, Just b)
   div_
     [ id_ "sidemenu"
     , if oob then hxSwapOob_ "true" else mempty
     ] do
     forM_ (navs `zip` [0..]) \(nav,i) -> do
-      let is_selected = mi == Just i
+      let is_selected1 = sel1 == Just i
       div_
         [ hxTarget_ "#main"
         , hxGet_    $ navURL nav -- TODO: use an indirection (store index in HTML, e.g. "/menu/$i")
         , class_    "navitem"
-        , if is_selected then class_ "selected" else mempty
+        , if is_selected1 then class_ "selected" else mempty
         ] $ toHtml (navTitle nav)
-      when is_selected $ do
+      when is_selected1 $ do
         div_
           [ class_ "navsub"
           ] do
-          forM_ (navSubs nav) \snav -> do
+          forM_ (navSubs nav `zip` [0..]) \(snav,j) -> do
+            let is_selected2 = sel2 == Just j
             div_
               [ hxTarget_ "#main"
               , hxGet_    $ navURL snav
               , class_    "navsubitem"
+              , if is_selected2 then class_ "selected" else mempty
               ] $ toHtml (navTitle snav)
               -- We don't support third level nesting (yet)
