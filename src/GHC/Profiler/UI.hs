@@ -1,6 +1,7 @@
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE BlockArguments #-}
 {-# LANGUAGE MultiWayIf #-}
+{-# LANGUAGE LambdaCase #-}
 
 -- | App web UI
 module GHC.Profiler.UI
@@ -25,6 +26,10 @@ import Control.Monad
 import Data.IORef
 import Data.Text (Text,pack,unpack)
 import Data.ByteString.Builder
+import System.Process
+import System.FilePath
+import System.IO.Temp
+import System.Exit
 
 ------------------------------------
 -- To upstream in lucid2-htmx
@@ -38,8 +43,8 @@ sseConnect_ = term "sse-connect"
 ------------------------------------
 
 data UIState = UIState
-  { uiSSE :: SSE
-  , uiCount :: IORef Int
+  { uiSSE    :: SSE
+  , uiGhcOut :: IORef (Maybe (ExitCode,String,String)) -- Last GHC output
   }
 
 initUIState :: IO UIState
@@ -52,12 +57,12 @@ initUIState = do
   -- We don't want to have too much application logic in the UI in case we
   -- decide to have a TUI too.
 
-  -- some dumb counter for the example
-  count <- newIORef 0
+  -- some empty value for last GHC result
+  ghc_res <- newIORef Nothing
 
   pure $ UIState
     { uiSSE = sse
-    , uiCount = count
+    , uiGhcOut = ghc_res
     }
 
 
@@ -78,41 +83,46 @@ httpApp uistate state req respond = do
   -- match on request and respond
   case pathInfo req of
     []            -> respondHtml (full state (welcomeHtml state))
-    ["welcome"]   -> respondHtml (welcomeHtml state)
     ["style.css"] -> respondText ok200 [] renderedCss
     ["events"]    -> respond =<< responseSSE sse
 
     "nav" : path  -> respondHtml $ navHtml True state (fmap (read . unpack) path)
 
     ["status"]    -> do
-      v <- readIORef (uiCount uistate)
-      respondHtml $ "Counted " <> toHtml (show v)
-    ["button"]    -> respondHtml clickButton
+      readIORef (uiGhcOut uistate) >>= \case
+        Nothing             -> respondHtml "No GHC result"
+        Just (code,out,err) -> respondHtml do
+          p_ [] do
+            "GHC terminated with: "
+            toHtml (show code)
+          "Stdout:"
+          pre_ [] (toHtml out)
+          "Stderr:"
+          pre_ [] (toHtml err)
+
     ["clicked"]   -> do
-      -- don't spawn the thread twice...
-      old <- readIORef (uiCount uistate)
-      when (old == 0) $ do
-        -- send some events, just for fun
-        void $ forkIO $ forever do
-          v <- atomicModifyIORef (uiCount uistate) (\x -> (x+1,x+1))
-          sendEvent sse $ ServerEvent
-            { eventName = Just $ byteString "status_update"
-            , eventId   = Nothing
-            , eventData = [stringUtf8 $ "<div>Set " ++ show v ++ "</div>"]
-            }
-          threadDelay 1000000
-
+      -- TODO: don't spawn the thread twice...
+      withSystemTempDirectory "ghc-prof" \fp -> void $ forkIO $ do
+        let p = fp </> "HelloWorld.hs"
+        Prelude.writeFile p
+          "module Main where\n\
+          \main :: IO ()\n\
+          \main = putStrLn \"Hello World\""
+        (code,out,err) <- readCreateProcessWithExitCode ((shell ("ghc " <> p <> " +RTS -s"))
+          { cwd = Just fp
+          })
+          ""
+        -- store result
+        writeIORef (uiGhcOut uistate) (Just (code,out,err))
+        -- signal that result arrived
+        sendEvent sse $ ServerEvent
+          { eventName = Just $ byteString "status_update"
+          , eventId   = Nothing
+          , eventData = [""]
+          }
       respondHtml (clickedHtml state)
+
     _             -> respondLBS status404 [] ""
-
-
-clickButton :: Html ()
-clickButton =
-  button_
-    [ hxPost_ "/clicked"
-    , hxSwap_ "outerHTML"
-    ] do
-    "Click me!"
 
 
 welcomeHtml :: S -> Html ()
@@ -136,7 +146,6 @@ welcomeHtml _state = do
 
   p_ "Happy profiling!"
 
-  clickButton
 
 
 clickedHtml :: S -> Html ()
@@ -144,14 +153,8 @@ clickedHtml _state = do
   div_
     [ id_ "dynamic"
     ] do
-      button_
-        [ hxSwap_ "outerHTML"
-        , hxTarget_ "#dynamic"
-        , hxPost_ "/button"
-        ] "STOP!"
       div_
-        [ hxExt_ "sse"
-        , sseConnect_ "/events"
+        [ 
         ] do
           -- triggered
           div_
@@ -159,11 +162,11 @@ clickedHtml _state = do
             , hxTrigger_ "sse:status_update"
             ] do
             "Triggered div"
-          -- show received event data
-          div_
-            [ sseSwap_ "status_update"
-            ] do
-            "Received event data"
+          -- -- show received event data
+          -- div_
+          --   [ sseSwap_ "status_update"
+          --   ] do
+          --   "Received event data"
 
 -- | Full page: send HTML headers
 full :: S -> Html () -> Html ()
@@ -196,7 +199,15 @@ emptyHtml = mempty
 
 helloHtml :: Html ()
 helloHtml = do
-  "Hello World!"
+  p_ "Hello World!"
+
+  button_
+    [ hxPost_ "/clicked"
+    , hxSwap_ "outerHTML"
+    ] do
+    "Build HelloWorld with GHC"
+
+
 
 
 data Nav = Nav
