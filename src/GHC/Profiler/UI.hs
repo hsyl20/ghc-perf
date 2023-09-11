@@ -228,12 +228,14 @@ navHtml oob mi = do
     , if oob then hxSwapOob_ "true" else mempty
     ] do
     forM_ (navs `zip` [0..]) \(nav,i) -> do
+      let is_selected = mi == Just i
       div_
         [ hxTarget_ "#main"
         , hxGet_    $ navURL nav -- TODO: use an indirection (store index in HTML, e.g. "/menu/$i")
         , class_    "navitem"
+        , if is_selected then class_ "selected" else mempty
         ] $ toHtml (navTitle nav)
-      when (mi == Just i) $ do
+      when is_selected $ do
         div_
           [ class_ "navsub"
           ] do

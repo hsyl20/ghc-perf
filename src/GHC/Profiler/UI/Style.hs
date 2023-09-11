@@ -108,6 +108,13 @@ css = do
       ":hover" & do
         backgroundColor "#5e9eee"
 
+      ".selected" & do
+        backgroundColor "#90969f"
+
+        ":hover" & do
+          backgroundColor "#5e9eee"
+
+
     ".navsubitem" ? do
 
       width (pct 100)
@@ -116,8 +123,15 @@ css = do
       paddingBottom (em 0.5)
       cursor pointer
 
+      ".selected" & do
+        backgroundColor "#aab0b9"
+
+        ":hover" & do
+          backgroundColor "#90bcf2"
+
       ":hover" & do
         backgroundColor "#90bcf2"
+
 
   "#main" ? do
     backgroundColor main_bg
