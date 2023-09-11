@@ -23,7 +23,7 @@ import Data.Text.Lazy.Encoding (encodeUtf8)
 import Control.Concurrent
 import Control.Monad
 import Data.IORef
-import Data.Text (Text)
+import Data.Text (Text,pack,unpack)
 import Data.ByteString.Builder
 
 ------------------------------------
@@ -77,17 +77,12 @@ httpApp uistate state req respond = do
 
   -- match on request and respond
   case pathInfo req of
-    []            -> respondHtml (full (welcomeHtml state))
+    []            -> respondHtml (full state (welcomeHtml state))
     ["welcome"]   -> respondHtml (welcomeHtml state)
     ["style.css"] -> respondText ok200 [] renderedCss
     ["events"]    -> respond =<< responseSSE sse
 
-    ["hello_world"] -> respondHtml do
-                        navHtml True [1]
-                        helloHtml
-    ["sub1"]        -> respondHtml do
-                        navHtml True [1,0]
-                        helloHtml
+    "nav" : path  -> respondHtml $ navHtml True state (fmap (read . unpack) path)
 
     ["status"]    -> do
       v <- readIORef (uiCount uistate)
@@ -143,9 +138,6 @@ welcomeHtml _state = do
 
   clickButton
 
-  -- out-of-band menu update
-  navHtml True [0]
-
 
 clickedHtml :: S -> Html ()
 clickedHtml _state = do
@@ -174,8 +166,8 @@ clickedHtml _state = do
             "Received event data"
 
 -- | Full page: send HTML headers
-full :: Html () -> Html ()
-full p = doctypehtml_ $ do
+full :: S -> Html () -> Html ()
+full state p = doctypehtml_ $ do
   head_ do
     title_ "GHC Profiler"
     script_ [ src_ "https://unpkg.com/htmx.org@1.9.5" ] emptyHtml
@@ -195,7 +187,7 @@ full p = doctypehtml_ $ do
           div_ [class_ "logo"] do
             "GHC profiler"
         div_ [id_ "sidenav"] do
-          navHtml False [0]
+          navHtml False state [0]
         div_ [id_ "main" ] do
           p
 
@@ -208,37 +200,45 @@ helloHtml = do
 
 
 data Nav = Nav
-  { navTitle :: Text
-  , navURL   :: Text
-  , navSubs  :: [Nav]
+  { navTitle    :: Text         -- ^ Menu title
+  , navContents :: S -> Html () -- ^ Page to show
+  , navSubs     :: [Nav]        -- ^ Sub menu entries
   }
 
 navs :: [Nav]
 navs =
-  [ Nav "Welcome" "/welcome" []
-  , Nav "Hello World" "/hello_world"
-      [ Nav "Sub item 1" "/sub1" []
-      , Nav "Sub item 2" "/sub2" []
-      , Nav "Sub item 3" "/sub3" []
+  [ Nav "Welcome" welcomeHtml []
+  , Nav "Hello World" (const helloHtml)
+      [ Nav "Sub item 1" (const "sub1") []
+      , Nav "Sub item 2" (const "sub2") []
+      , Nav "Sub item 3" (const "sub3") []
       ]
   ]
 
 -- | Display the menu
-navHtml :: Bool -> [Int] -> Html ()
-navHtml oob path = do
-  let (sel1,sel2) = case path of
-        []    -> (Nothing,Nothing)
-        [a]   -> (Just a, Nothing)
-        a:b:_ -> (Just a, Just b)
+navHtml :: Bool -> S -> [Int] -> Html ()
+navHtml oob state path = do
+  let (sel1,sel2,main_html) = case path of
+        []    -> (Nothing,Nothing, const emptyHtml)
+        [a]   -> (Just a, Nothing, navContents (navs !! a))
+        a:b:_ -> (Just a, Just b,  navContents (navSubs (navs !! a) !! b))
+
+  -- out-of-band swap of main contents
+  when oob do
+    div_
+      [ id_ "main"
+      , hxSwapOob_ "true"
+      ] (main_html state)
+
+  -- display the whole menu with style for selected elements
   div_
     [ id_ "sidemenu"
-    , if oob then hxSwapOob_ "true" else mempty
     ] do
     forM_ (navs `zip` [0..]) \(nav,i) -> do
       let is_selected1 = sel1 == Just i
       div_
-        [ hxTarget_ "#main"
-        , hxGet_    $ navURL nav -- TODO: use an indirection (store index in HTML, e.g. "/menu/$i")
+        [ hxTarget_ "#sidenav"
+        , hxGet_    ("/nav/" <> pack (show i))
         , class_    "navitem"
         , if is_selected1 then class_ "selected" else mempty
         ] $ toHtml (navTitle nav)
@@ -249,8 +249,8 @@ navHtml oob path = do
           forM_ (navSubs nav `zip` [0..]) \(snav,j) -> do
             let is_selected2 = sel2 == Just j
             div_
-              [ hxTarget_ "#main"
-              , hxGet_    $ navURL snav
+              [ hxTarget_ "#sidenav"
+              , hxGet_    ("nav/"<> pack (show i) <> "/" <> pack (show j))
               , class_    "navsubitem"
               , if is_selected2 then class_ "selected" else mempty
               ] $ toHtml (navTitle snav)
