@@ -24,7 +24,6 @@ import Control.Concurrent
 import Control.Monad
 import Data.IORef
 import Data.Text (Text)
-import qualified Data.Text as Text
 import Data.ByteString.Builder
 
 ------------------------------------
@@ -139,7 +138,8 @@ welcomeHtml _state = do
 
   clickButton
 
-  showSubMenu 0
+  -- out-of-band menu update
+  navHtml True (Just 0)
 
 
 clickedHtml :: S -> Html ()
@@ -190,7 +190,7 @@ full p = doctypehtml_ $ do
           div_ [class_ "logo"] do
             "GHC profiler"
         div_ [id_ "sidenav"] do
-          navHtml
+          navHtml False (Just 0)
         div_ [id_ "main" ] do
           p
 
@@ -199,7 +199,8 @@ emptyHtml = mempty
 
 helloHtml :: Html ()
 helloHtml = do
-  showSubMenu 1
+  -- out-of-band menu update
+  navHtml True (Just 1)
   "Hello World!"
 
 
@@ -220,39 +221,26 @@ navs =
   ]
 
 -- | Display the menu
-navHtml :: Html ()
-navHtml = forM_ (navs `zip` [0..]) \(nav,i) -> do
+navHtml :: Bool -> Maybe Int -> Html ()
+navHtml oob mi = do
   div_
-    [ hxTarget_ "#main"
-    , hxGet_    $ navURL nav
-    , class_    "navitem"
-    ] $ toHtml (navTitle nav)
-  div_
-    [ id_ (navSubId i)
-    ] emptyHtml -- TODO: display initial sub menu if necessary
-
-navSubItemHtml :: Nav -> Html ()
-navSubItemHtml nav = do
-  div_
-    [ hxTarget_ "#main"
-    , hxGet_    $ navURL nav
-    , class_    "navsubitem"
-    ] $ toHtml (navTitle nav)
-  -- We don't support third level nesting (yet)
-
-
-navSubId :: Int -> Text
-navSubId i = "navsub" <> Text.pack (show i)
-
--- | Render submenus
---
--- For out-of-band update, all of them are empty except for the selected one.
-showSubMenu :: Int -> Html ()
-showSubMenu selected = do
-  forM_ (navs `zip` [0..]) \(nav,i) -> do
-    div_
-      [ id_ (navSubId i)
-      , hxSwapOob_ "true"
-      ] if
-          | i /= selected -> emptyHtml
-          | otherwise     -> forM_ (navSubs nav) navSubItemHtml
+    [ id_ "sidemenu"
+    , if oob then hxSwapOob_ "true" else mempty
+    ] do
+    forM_ (navs `zip` [0..]) \(nav,i) -> do
+      div_
+        [ hxTarget_ "#main"
+        , hxGet_    $ navURL nav -- TODO: use an indirection (store index in HTML, e.g. "/menu/$i")
+        , class_    "navitem"
+        ] $ toHtml (navTitle nav)
+      when (mi == Just i) $ do
+        div_
+          [ class_ "navsub"
+          ] do
+          forM_ (navSubs nav) \snav -> do
+            div_
+              [ hxTarget_ "#main"
+              , hxGet_    $ navURL snav
+              , class_    "navsubitem"
+              ] $ toHtml (navTitle snav)
+              -- We don't support third level nesting (yet)
