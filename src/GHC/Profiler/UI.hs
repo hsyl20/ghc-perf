@@ -43,12 +43,14 @@ sseConnect_ = term "sse-connect"
 ------------------------------------
 
 data UIState = UIState
-  { uiSSE    :: SSE
-  , uiGhcOut :: IORef (Maybe (ExitCode,String,String)) -- Last GHC output
+  { uiSSE      :: !SSE
+  , uiAppState :: !S
+  , uiGhcOut   :: !(IORef (Maybe (ExitCode,String,String))) -- Last GHC output
+  , uiUnique   :: !(IORef Integer)                          -- ^ Unique counter
   }
 
-initUIState :: IO UIState
-initUIState = do
+initUIState :: S -> IO UIState
+initUIState state = do
   -- Initialize global server-sent events
   sse <- initSSE
   -- TODO: we need to get events from somewhere.
@@ -60,14 +62,22 @@ initUIState = do
   -- some empty value for last GHC result
   ghc_res <- newIORef Nothing
 
+  uniq <- newIORef 0
+
   pure $ UIState
-    { uiSSE = sse
-    , uiGhcOut = ghc_res
+    { uiSSE      = sse
+    , uiAppState = state
+    , uiGhcOut   = ghc_res
+    , uiUnique   = uniq
     }
 
+-- | Get unique value
+getUnique :: UIState -> IO Integer
+getUnique s = atomicModifyIORef' (uiUnique s) \v -> (v+1,v)
 
-httpApp :: UIState -> S -> Application
-httpApp uistate state req respond = do
+
+httpApp :: UIState -> Application
+httpApp state req respond = do
 
   let
     respondHtml' status headers html = do
@@ -78,7 +88,7 @@ httpApp uistate state req respond = do
     respondLBS status headers bs = respond (responseLBS status headers bs)
     respondText status headers t = respondLBS status headers (encodeUtf8 t)
 
-    sse = uiSSE uistate
+    sse = uiSSE state
 
   -- match on request and respond
   case pathInfo req of
@@ -89,7 +99,7 @@ httpApp uistate state req respond = do
     "nav" : path  -> respondHtml $ navHtml True state (fmap (read . unpack) path)
 
     ["status"]    -> do
-      readIORef (uiGhcOut uistate) >>= \case
+      readIORef (uiGhcOut state) >>= \case
         Nothing             -> respondHtml "No GHC result"
         Just (code,out,err) -> respondHtml do
           p_ [] do
@@ -113,7 +123,7 @@ httpApp uistate state req respond = do
           })
           ""
         -- store result
-        writeIORef (uiGhcOut uistate) (Just (code,out,err))
+        writeIORef (uiGhcOut state) (Just (code,out,err))
         -- signal that result arrived
         sendEvent sse $ ServerEvent
           { eventName = Just $ byteString "status_update"
@@ -125,7 +135,7 @@ httpApp uistate state req respond = do
     _             -> respondLBS status404 [] ""
 
 
-welcomeHtml :: S -> Html ()
+welcomeHtml :: UIState -> Html ()
 welcomeHtml _state = do
   h1_ "Welcome to the GHC profiler (alpha)"
   p_ "The purpose of this profiler is twofold:"
@@ -148,7 +158,7 @@ welcomeHtml _state = do
 
 
 
-clickedHtml :: S -> Html ()
+clickedHtml :: UIState -> Html ()
 clickedHtml _state = do
   div_
     [ id_ "dynamic"
@@ -169,7 +179,7 @@ clickedHtml _state = do
           --   "Received event data"
 
 -- | Full page: send HTML headers
-full :: S -> Html () -> Html ()
+full :: UIState -> Html () -> Html ()
 full state p = doctypehtml_ $ do
   head_ do
     title_ "GHC Profiler"
@@ -211,9 +221,9 @@ helloHtml = do
 
 
 data Nav = Nav
-  { navTitle    :: Text         -- ^ Menu title
-  , navContents :: S -> Html () -- ^ Page to show
-  , navSubs     :: [Nav]        -- ^ Sub menu entries
+  { navTitle    :: Text               -- ^ Menu title
+  , navContents :: UIState -> Html () -- ^ Page to show
+  , navSubs     :: [Nav]              -- ^ Sub menu entries
   }
 
 navs :: [Nav]
@@ -227,7 +237,7 @@ navs =
   ]
 
 -- | Display the menu
-navHtml :: Bool -> S -> [Int] -> Html ()
+navHtml :: Bool -> UIState -> [Int] -> Html ()
 navHtml oob state path = do
   let (sel1,sel2,main_html) = case path of
         []    -> (Nothing,Nothing, const emptyHtml)

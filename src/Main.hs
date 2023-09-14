@@ -12,5 +12,5 @@ main = do
 
   -- run server
   putStrLn "Running ghc-profiler on port 3000"
-  uistate <- initUIState
-  Warp.run 3000 (httpApp uistate state)
+  uistate <- initUIState state
+  Warp.run 3000 (httpApp uistate)
