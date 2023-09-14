@@ -111,6 +111,8 @@ httpApp state req respond = do
           pre_ [] (toHtml err)
 
     ["clicked"]   -> do
+      uniq <- getUnique state
+
       -- TODO: don't spawn the thread twice...
       void $ forkIO $ withSystemTempDirectory "ghc-prof" \fp -> do
         let p = fp </> "HelloWorld.hs"
@@ -122,15 +124,18 @@ httpApp state req respond = do
           { cwd = Just fp
           })
           ""
-        -- store result
+        -- store result: TODO store in map keyed with "uniq"
         writeIORef (uiGhcOut state) (Just (code,out,err))
+
         -- signal that result arrived
-        sendEvent sse $ ServerEvent
-          { eventName = Just $ byteString "status_update"
-          , eventId   = Nothing
-          , eventData = [""]
-          }
-      respondHtml (clickedHtml state)
+        let event = ServerEvent
+              { eventName = Just $ byteString "status_update_" <> integerDec uniq
+              , eventId   = Nothing
+              , eventData = [""]
+              }
+        sendEvent sse event
+
+      respondHtml (clickedHtml state uniq)
 
     _             -> respondLBS status404 [] ""
 
@@ -158,10 +163,10 @@ welcomeHtml _state = do
 
 
 
-clickedHtml :: UIState -> Html ()
-clickedHtml _state = do
+clickedHtml :: UIState -> Integer -> Html ()
+clickedHtml _state req = do
   div_
-    [ id_ "dynamic"
+    [ 
     ] do
       div_
         [ 
@@ -169,14 +174,16 @@ clickedHtml _state = do
           -- triggered
           div_
             [ hxGet_ "/status"
-            , hxTrigger_ "sse:status_update"
+            , hxTrigger_ ("sse:status_update_" <> pack (show req))
             ] do
-            "GHC is building HelloWorld... Please wait."
+            "Processing... Please wait."
           -- show received event data
+          -- doesn't work if swapped in after initialization because of:
+          -- https://github.com/bigskysoftware/htmx/issues/916
           -- div_
-          --   [ sseSwap_ "status_update"
+          --   [ sseSwap_ ("status_update_" <> pack (show req))
           --   ] do
-          --   "Received event data"
+          --   "Processing... Please wait."
 
 -- | Full page: send HTML headers
 full :: UIState -> Html () -> Html ()
