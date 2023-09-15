@@ -26,12 +26,24 @@ executable ghc-profiler
 
     main-is:          Main.hs
 
+    default-extensions:
+      LambdaCase,
+      BlockArguments,
+      MultiWayIf,
+      OverloadedStrings,
+      ScopedTypeVariables
+
     other-modules:
       GHC.Profiler.UI
       GHC.Profiler.UI.Events
       GHC.Profiler.UI.Style
+      GHC.Profiler.UI.Html
+      GHC.Profiler.UI.Monad
       GHC.Profiler.State
       GHC.Profiler.Compiler
+      GHC.Profiler.Component
+      GHC.Profiler.Responder
+      GHC.Profiler.Component.RtsStats
 
     build-depends:
       base,
@@ -47,6 +59,9 @@ executable ghc-profiler
       process,
       text,
       bytestring,
+      transformers,
+      containers,
+      mtl,
       sqlite-simple
 
     -- Directories containing source files.

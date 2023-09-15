@@ -1,6 +1,7 @@
 module Main where
 
 import GHC.Profiler.UI
+import GHC.Profiler.UI.Monad
 import GHC.Profiler.State
 
 import qualified Network.Wai.Handler.Warp as Warp
@@ -12,5 +13,5 @@ main = do
 
   -- run web UI
   putStrLn "Running ghc-profiler on port 3000"
-  uistate <- initUIState state
-  Warp.run 3000 (httpApp uistate)
+  mstate <- initMState state
+  Warp.run 3000 (httpApp mstate)
