@@ -46,7 +46,8 @@ executable ghc-profiler
       filepath,
       process,
       text,
-      bytestring
+      bytestring,
+      sqlite-simple
 
     -- Directories containing source files.
     hs-source-dirs:   src

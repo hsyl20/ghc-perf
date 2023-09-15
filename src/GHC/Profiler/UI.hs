@@ -2,7 +2,7 @@
 {-# LANGUAGE BlockArguments #-}
 {-# LANGUAGE MultiWayIf #-}
 {-# LANGUAGE LambdaCase #-}
-{-# LANGUAGE GADTs #-}
+{-# LANGUAGE ScopedTypeVariables #-}
 
 -- | App web UI
 module GHC.Profiler.UI
@@ -24,19 +24,18 @@ import Lucid.Htmx
 import Data.Text.Lazy.Encoding (encodeUtf8)
 import Control.Concurrent
 import Control.Monad
-import Data.IORef
 import Data.Text (Text,pack,unpack)
 import Data.ByteString.Builder
 import System.Process
 import System.FilePath
 import System.IO.Temp
-import System.Exit
+import Database.SQLite.Simple
 
 ------------------------------------
 -- To upstream in lucid2-htmx
 --
-sseSwap_ :: Term arg result => arg -> result
-sseSwap_ = term "sse-swap"
+-- sseSwap_ :: Term arg result => arg -> result
+-- sseSwap_ = term "sse-swap"
 
 sseConnect_ :: Term arg result => arg -> result
 sseConnect_ = term "sse-connect"
@@ -46,8 +45,6 @@ sseConnect_ = term "sse-connect"
 data UIState = UIState
   { uiSSE      :: !SSE
   , uiAppState :: !AppState
-  , uiGhcOut   :: !(IORef (Maybe (ExitCode,String,String))) -- Last GHC output
-  , uiUnique   :: !(IORef Integer)                          -- ^ Unique counter
   }
 
 initUIState :: AppState -> IO UIState
@@ -60,22 +57,10 @@ initUIState state = do
   -- We don't want to have too much application logic in the UI in case we
   -- decide to have a TUI too.
 
-  -- some empty value for last GHC result
-  ghc_res <- newIORef Nothing
-
-  uniq <- newIORef 0
-
   pure $ UIState
     { uiSSE      = sse
     , uiAppState = state
-    , uiGhcOut   = ghc_res
-    , uiUnique   = uniq
     }
-
--- | Get unique value
-getUnique :: UIState -> IO Integer
-getUnique s = atomicModifyIORef' (uiUnique s) \v -> (v+1,v)
-
 
 httpApp :: UIState -> Application
 httpApp state req respond = do
@@ -99,22 +84,39 @@ httpApp state req respond = do
 
     "nav" : path  -> respondHtml $ navHtml True state (fmap (read . unpack) path)
 
-    ["status"]    -> do
-      readIORef (uiGhcOut state) >>= \case
-        Nothing             -> respondHtml "No GHC result"
-        Just (code,out,err) -> respondHtml do
-          p_ [] do
-            "GHC terminated with: "
-            toHtml (show code)
-          "Stdout:"
-          pre_ [] (toHtml out)
-          "Stderr:"
-          pre_ [] (toHtml err)
+    ["status", n] -> do
+      withDB \db -> do
+        rs <- queryNamed db "SELECT done,code,stdout,stderr FROM rts_stats WHERE id = :id"
+                [ ":id" := n
+                ]
+        case rs of
+          [((done :: Integer),(code :: Text),(out :: Text), (err :: Text))] -> case done of
+            0 -> respondHtml "No GHC result"
+            _ -> respondHtml do
+              p_ [] do
+                "GHC terminated with: "
+                toHtml code
+              "Stdout:"
+              pre_ [] (toHtml out)
+              "Stderr:"
+              pre_ [] (toHtml err)
+          []  -> respondHtml "Invalid ID"
+          _   -> respondHtml "Too many results. Expected one."
 
     ["clicked"]   -> do
-      uniq <- getUnique state
+      res_id <- withDB \db -> do
+        execute_ db "CREATE TABLE IF NOT EXISTS rts_stats \n\
+                    \( id INTEGER PRIMARY KEY\
+                    \, project INTEGER\
+                    \, done INTEGER\
+                    \, code TEXT\
+                    \, stdout TEXT\
+                    \, stderr TEXT\
+                    \)"
+        execute db "INSERT INTO rts_stats (done) VALUES (0)" ()
+        lastInsertRowId db
 
-      -- TODO: don't spawn the thread twice...
+      -- spawn the request
       void $ forkIO $ withSystemTempDirectory "ghc-prof" \fp -> do
         let p = fp </> "HelloWorld.hs"
         Prelude.writeFile p
@@ -125,13 +127,18 @@ httpApp state req respond = do
           { cwd = Just fp
           })
           ""
-        -- store result: TODO store in map keyed with "uniq"
-        let res = (code,out,err)
-        writeIORef (uiGhcOut state) (Just res)
+        -- store result in DB
+        withDB \db -> do
+          executeNamed db "UPDATE rts_stats SET done = 1, code = :code, stdout = :stdout, stderr = :stderr WHERE id = :id"
+            [ ":code"   := show code
+            , ":stdout" := out
+            , ":stderr" := err
+            , ":id"     := res_id
+            ]
 
         -- signal that result arrived
         let event = ServerEvent
-              { eventName = Just $ byteString "status_update_" <> integerDec uniq
+              { eventName = Just $ byteString "status_update_" <> integerDec (fromIntegral res_id)
               , eventId   = Nothing
               , eventData = [""]
               }
@@ -141,8 +148,8 @@ httpApp state req respond = do
         -- this is the html that is sent first and that will then be updated
         -- with the result
         div_
-          [ hxGet_ "/status" -- TODO: replace with "/view/resId"
-          , hxTrigger_ ("sse:status_update_" <> pack (show uniq))
+          [ hxGet_ ("/status/" <> pack (show res_id))
+          , hxTrigger_ ("sse:status_update_" <> pack (show res_id))
           ] do
           "Processing... Please wait."
 
