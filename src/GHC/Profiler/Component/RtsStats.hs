@@ -15,6 +15,7 @@ import Network.HTTP.Types.Status
 import Data.Text (Text,pack)
 import Control.Concurrent
 import Control.Monad
+import Control.Monad.IO.Class
 import System.Process
 import System.FilePath
 import System.IO.Temp
@@ -113,3 +114,20 @@ rtsStatsButton = do
     , hxSwap_ "outerHTML"
     ] do
     "Build HelloWorld with GHC"
+
+  rs <- liftIO $ withDB \db -> do
+    query_ db "SELECT id FROM rts_stats"
+
+  when (not (null rs)) do
+    p_ "Previous runs:"
+    ul_ [] do
+      forM_ rs \(Only (rowid :: Integer)) -> do
+        li_ do
+          toHtml (show rowid)
+          " - "
+          a_
+            [ hxGet_  ("/" <> comp_name <> "/status/" <> pack (show rowid))
+            , hxSwap_ "outerHTML"
+            , href_ "#"
+            ]
+            "Details"
