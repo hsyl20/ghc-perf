@@ -2,6 +2,7 @@
 {-# LANGUAGE BlockArguments #-}
 {-# LANGUAGE MultiWayIf #-}
 {-# LANGUAGE LambdaCase #-}
+{-# LANGUAGE GADTs #-}
 
 -- | App web UI
 module GHC.Profiler.UI
@@ -44,12 +45,12 @@ sseConnect_ = term "sse-connect"
 
 data UIState = UIState
   { uiSSE      :: !SSE
-  , uiAppState :: !S
+  , uiAppState :: !AppState
   , uiGhcOut   :: !(IORef (Maybe (ExitCode,String,String))) -- Last GHC output
   , uiUnique   :: !(IORef Integer)                          -- ^ Unique counter
   }
 
-initUIState :: S -> IO UIState
+initUIState :: AppState -> IO UIState
 initUIState state = do
   -- Initialize global server-sent events
   sse <- initSSE
@@ -125,7 +126,8 @@ httpApp state req respond = do
           })
           ""
         -- store result: TODO store in map keyed with "uniq"
-        writeIORef (uiGhcOut state) (Just (code,out,err))
+        let res = (code,out,err)
+        writeIORef (uiGhcOut state) (Just res)
 
         -- signal that result arrived
         let event = ServerEvent
@@ -135,7 +137,15 @@ httpApp state req respond = do
               }
         sendEvent sse event
 
-      respondHtml (clickedHtml state uniq)
+      respondHtml do
+        -- this is the html that is sent first and that will then be updated
+        -- with the result
+        div_
+          [ hxGet_ "/status" -- TODO: replace with "/view/resId"
+          , hxTrigger_ ("sse:status_update_" <> pack (show uniq))
+          ] do
+          "Processing... Please wait."
+
 
     _             -> respondLBS status404 [] ""
 
@@ -163,28 +173,6 @@ welcomeHtml _state = do
 
 
 
-clickedHtml :: UIState -> Integer -> Html ()
-clickedHtml _state req = do
-  div_
-    [ 
-    ] do
-      div_
-        [ 
-        ] do
-          -- triggered
-          div_
-            [ hxGet_ "/status"
-            , hxTrigger_ ("sse:status_update_" <> pack (show req))
-            ] do
-            "Processing... Please wait."
-          -- show received event data
-          -- doesn't work if swapped in after initialization because of:
-          -- https://github.com/bigskysoftware/htmx/issues/916
-          -- div_
-          --   [ sseSwap_ ("status_update_" <> pack (show req))
-          --   ] do
-          --   "Processing... Please wait."
-
 -- | Full page: send HTML headers
 full :: UIState -> Html () -> Html ()
 full state p = doctypehtml_ $ do
@@ -199,6 +187,9 @@ full state p = doctypehtml_ $ do
     -- "sse:event_name" to be triggered by an event and fetch an updated
     -- information (hxGet/hxPost...) or be replaced by the event data directly
     -- (sseSwap).
+    -- The latter doesn't fully work yet for sse-swap elements installed after
+    -- initialization of the connection (see
+    -- https://github.com/bigskysoftware/htmx/issues/916)
     [ hxExt_ "sse"
     , sseConnect_ "/events"
     ] do

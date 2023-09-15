@@ -1,11 +1,11 @@
 -- | App state
 module GHC.Profiler.State
-  ( S
-  , initState
+  ( AppState (..)
+  , initAppState
   )
 where
 
-type S = ()
+data AppState = AppState
 
-initState :: IO S
-initState = pure ()
+initAppState :: IO AppState
+initAppState = pure AppState
