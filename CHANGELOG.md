@@ -1,5 +1,6 @@
 # Revision history for ghc-profiler
 
-## 0.1.0.0 -- YYYY-mm-dd
+## 2023-09
 
-* First version. Released on an unsuspecting world.
+- Added basic Web UI (based on htmx)
+- Added basic session store (based on sqlite)
