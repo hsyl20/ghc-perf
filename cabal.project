@@ -1,0 +1,3 @@
+packages: *.cabal
+
+allow-newer: lucid2-htmx:lucid2
