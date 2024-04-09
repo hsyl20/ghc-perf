@@ -78,7 +78,7 @@ full :: H () -> H ()
 full p = doctypehtml_ $ do
   head_ do
     title_ "GHC Profiler"
-    script_ [ src_ "https://unpkg.com/htmx.org@1.9.5" ] emptyHtml
+    script_ [ src_ "https://unpkg.com/htmx.org@1.9.11" ] emptyHtml
     script_ [ src_ "https://unpkg.com/htmx.org/dist/ext/sse.js" ] emptyHtml
     -- CSS style
     link_ [ href_ "/style.css", rel_ "stylesheet", type_ "text/css"]
@@ -87,9 +87,6 @@ full p = doctypehtml_ $ do
     -- "sse:event_name" to be triggered by an event and fetch an updated
     -- information (hxGet/hxPost...) or be replaced by the event data directly
     -- (sseSwap).
-    -- The latter doesn't fully work yet for sse-swap elements installed after
-    -- initialization of the connection (see
-    -- https://github.com/bigskysoftware/htmx/issues/916)
     [ hxExt_ "sse"
     , sseConnect_ "/events"
     ] do
